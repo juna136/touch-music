@@ -421,4 +421,59 @@ updateQuestion=function(){
 
 };
 updateQuestion();showPage('welcome');
-</script></body></html>
+// LED連動：ここから
+const ledButton = document.createElement('button');
+ledButton.type = 'button';
+ledButton.textContent = 'LEDを接続';
+document.getElementById('cc').before(ledButton);
+
+let usbLedWriter = null;
+let lastLedLevel = -1;
+
+function syncUsbLed() {
+    if (!usbLedWriter) return;
+    const level = playing
+        ? Math.min(7, Math.floor(progress * 7) + 1)
+        : 0;
+    if (level === lastLedLevel) return;
+    lastLedLevel = level;
+    usbLedWriter.write(new TextEncoder().encode(level + '\n')).catch(() => {
+        ledButton.textContent = 'LED通信エラー：ページを開き直してください';
+    });
+}
+
+ledButton.onclick = async () => {
+    if (!navigator.serial) {
+        alert('WindowsのChromeまたはEdgeで開いてください。');
+        return;
+    }
+    try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        usbLedWriter = port.writable.getWriter();
+        ledButton.textContent = 'LED接続済み';
+        ledButton.disabled = true;
+        syncUsbLed();
+    } catch (error) {
+        if (error.name !== 'NotFoundError') alert(error.message);
+    }
+};
+
+const updateBeforeLed = update;
+update = function (p) {
+    updateBeforeLed(p);
+    syncUsbLed();
+};
+
+const playBeforeLed = play;
+play = async function () {
+    await playBeforeLed();
+    syncUsbLed();
+};
+
+const haltBeforeLed = halt;
+halt = function (reset) {
+    haltBeforeLed(reset);
+    syncUsbLed();
+};
+// LED連動：ここまで</script></body></html>
